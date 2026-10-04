@@ -499,11 +499,13 @@ function draw() {
   ctx.globalAlpha = 1;
   if (speed > 1.2 && state === 'play') {
     ctx.globalAlpha = Math.min(1, (speed - 1.2) / 1.5);
-    rr(150, 404, 100, 28, 14); ctx.fillStyle = '#ffffff'; ctx.fill();
-    ctx.fillStyle = '#2b2f55';
-    for (const ox of [166, 176]) { ctx.beginPath(); ctx.moveTo(ox, 411); ctx.lineTo(ox + 9, 418); ctx.lineTo(ox, 425); ctx.fill(); }
+    // Size the pill from the measured label so it fits whichever font loaded.
     ctx.font = '800 13px "Nunito", system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText('FINISHING', 190, 418.5);
+    const tw = ctx.measureText('FINISHING').width, pw = 14 + 19 + 6 + tw + 14, px = W / 2 - pw / 2;
+    rr(px, 404, pw, 28, 14); ctx.fillStyle = '#ffffff'; ctx.fill();
+    ctx.fillStyle = '#2b2f55';
+    for (const ox of [px + 14, px + 24]) { ctx.beginPath(); ctx.moveTo(ox, 411); ctx.lineTo(ox + 9, 418); ctx.lineTo(ox, 425); ctx.fill(); }
+    ctx.fillText('FINISHING', px + 39, 418.5);
     ctx.globalAlpha = 1;
   }
   if (hintOn) {
