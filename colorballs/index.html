@@ -94,7 +94,7 @@ const OUT_X = BELT.x1 + entryK * SP;
 const CH = 22;
 const COLX = [83, 161, 239, 317];
 const pickK = COLX.map(cx => Math.round((BL + Math.PI * BELT.r + (BELT.x2 - cx)) / SP) % N);
-const TRAY_TOP = 590, TH = 38, CAP = 3, VIS = 6;
+const TRAY_TOP = 590, TH = 38, CAP = 3;
 const PIPE_X = [80, 200, 320], PACK_Y = 182, PACK_HIDDEN = 110, GATE_Y = 284;
 const WALLS = [
   [8, 200, 8, 396], [392, 200, 392, 396],
@@ -107,7 +107,7 @@ const WALLS = [
 const TICK = 100, DROP = 260, EMERGE = 220, ENTER = 120, FLY = 160, CLEAR = 260, SHIFT = 200;
 
 /* ---------- state ---------- */
-let level = 1, pool, pipes, cols, slots, step, lastTick, T, sink, emitters, flyers, parts, state, hintOn, endT;
+let level = 1, pipes, cols, slots, step, lastTick, T, sink, emitters, flyers, parts, state, hintOn, endT;
 
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
@@ -124,59 +124,50 @@ function genLevel(n) {
   for (let i = 0; i < per * 3; i++) all.push(colors[i % nc]);
   shuffle(all);
   ps.forEach((p, i) => p.queue = all.slice(i * per, (i + 1) * per));
-  // Total trays per color must match the balls exactly.
-  const pool = {};
-  for (const p of ps) for (const c of p.queue) pool[c] = (pool[c] || 0) + p.mult * 3;
-  const cs = [0, 1, 2, 3].map(() => ({trays: [], clearT0: null, shiftT0: -1e9}));
-  return {pipes: ps, cols: cs, pool};
+  // Stack every tray up front, following one hidden tap order. A layout is kept only
+  // if pouring in that order lets every ball find a tray, whichever matching tray it
+  // happens to reach first.
+  const packs = [], idx = [0, 0, 0];
+  while (idx.some(i => i < per)) {
+    const avail = [0, 1, 2].filter(i => idx[i] < per);
+    const i = avail[Math.random() * avail.length | 0];
+    packs.push({c: ps[i].queue[idx[i]++], trays: ps[i].mult * 3});
+  }
+  let stacks = null;
+  for (let attempt = 0; attempt < 400 && !stacks; attempt++) {
+    const st = [[], [], [], []];
+    for (const pk of packs) for (let t = 0; t < pk.trays; t++) st[Math.random() * 4 | 0].push(pk.c);
+    if (solvable(st, packs)) stacks = st;
+  }
+  if (!stacks) return null;
+  const cs = stacks.map(st => ({trays: st.map(c => ({c, res: 0, fill: 0})), clearT0: null, shiftT0: -1e9}));
+  return {pipes: ps, cols: cs};
 }
 
-// A tray only appears when its balls are reachable: already in play (belt, sink, falling)
-// or in a pack at the front of a pipe, after what other trays already claim.
-function nextTrayColor() {
-  const live = {}, front = {}, need = {};
-  const add = (o, c, n) => o[c] = (o[c] || 0) + n;
-  for (const b of slots) if (b) add(live, b.c, 1);
-  for (const b of sink) add(live, b.c, 1);
-  for (const e of emitters) add(live, e.c, e.left);
-  for (const p of pipes) {
-    if (p.anim) add(live, p.anim.c, 9 * p.mult);
-    if (p.queue.length) add(front, p.queue[0], 9 * p.mult);
+function solvable(stacks, packs) {
+  for (let trial = 0; trial < 8; trial++) {
+    const ptr = [0, 0, 0, 0], fill = [0, 0, 0, 0];
+    for (const pk of packs) {
+      for (let n = pk.trays * CAP; n > 0; n--) {
+        const open = [0, 1, 2, 3].filter(j => stacks[j][ptr[j]] === pk.c);
+        if (!open.length) return false;
+        const j = open[Math.random() * open.length | 0];
+        if (++fill[j] === CAP) { fill[j] = 0; ptr[j]++; }
+      }
+    }
   }
-  for (const col of cols) for (const t of col.trays) add(need, t.c, CAP - t.res);
-  const pick = list => {
-    let r = Math.random() * list.reduce((s, x) => s + x[1], 0);
-    for (const x of list) if ((r -= x[1]) < 0) return x[0];
-    return list[0][0];
-  };
-  const cands = Object.keys(pool).filter(c => pool[c] > 0);
-  // Drain what is already in play first, then plan for the pipe fronts.
-  const inPlay = cands.map(c => [c, (live[c] || 0) - (need[c] || 0)]).filter(x => x[1] >= CAP);
-  if (inPlay.length) return pick(inPlay);
-  const reach = cands.map(c => [c, (live[c] || 0) + (front[c] || 0) - (need[c] || 0)]).filter(x => x[1] >= CAP);
-  return reach.length ? pick(reach) : null;
-}
-function refill(col) {
-  while (col.trays.length < VIS) {
-    const c = nextTrayColor();
-    if (!c) return;
-    pool[c]--;
-    col.trays.push({c, res: 0, fill: 0});
-  }
+  return true;
 }
 
 function startLevel(n) {
   level = n;
-  const g = genLevel(n);
-  pipes = g.pipes; cols = g.cols; pool = g.pool;
+  let g;
+  do g = genLevel(n); while (!g);
+  pipes = g.pipes; cols = g.cols;
   slots = new Array(N).fill(null);
   step = 0; T = 0; lastTick = 0;
   sink = []; emitters = []; flyers = []; parts = [];
   state = 'play'; endT = 0; hintOn = n === 1;
-  for (let r = 0; r < VIS; r++) for (const col of cols) {
-    const c = nextTrayColor();
-    if (c) { pool[c]--; col.trays.push({c, res: 0, fill: 0}); }
-  }
   ov.hidden = true;
   try { localStorage.setItem('colorballs.level', String(n)); } catch (e) {}
 }
@@ -269,7 +260,6 @@ const slotAt = k => ((k - step) % N + N) % N;
 const colBusy = c => c.clearT0 !== null || T - c.shiftT0 < SHIFT;
 function tick() {
   step++;
-  for (const col of cols) if (col.trays.length < VIS && col.clearT0 === null) refill(col);
   cols.forEach((col, j) => {
     const tr = col.trays[0];
     if (!tr || colBusy(col) || tr.res >= CAP) return;
@@ -329,7 +319,7 @@ function update(dt) {
       if (f.tr.fill >= CAP) { cols[f.col].clearT0 = T; burst(COLX[f.col], TRAY_TOP + 16, f.tr.c); }
     }
   }
-  for (const col of cols) if (col.clearT0 !== null && T - col.clearT0 >= CLEAR) { col.trays.shift(); refill(col); col.clearT0 = null; col.shiftT0 = T; }
+  for (const col of cols) if (col.clearT0 !== null && T - col.clearT0 >= CLEAR) { col.trays.shift(); col.clearT0 = null; col.shiftT0 = T; }
   for (let i = parts.length - 1; i >= 0; i--) {
     const p = parts[i];
     p.vy += 600 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
