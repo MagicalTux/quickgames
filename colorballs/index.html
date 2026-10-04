@@ -48,7 +48,8 @@ const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ---------- colors & sprites ---------- */
-const PALETTE = {cyan:'#4fd8ee', pink:'#e64fd3', yellow:'#ffcd2b', orange:'#ff8b33', purple:'#8a68ff', red:'#ff4d61'};
+const PALETTE = {cyan:'#4fd8ee', pink:'#e64fd3', yellow:'#ffcd2b', orange:'#ff8b33', purple:'#8a68ff', red:'#ff4d61',
+  blue:'#3d6ef5', white:'#eceef6', brown:'#9b6a43', teal:'#14a88a'};
 const NAMES = Object.keys(PALETTE);
 function shade(hex, a) {
   const n = parseInt(hex.slice(1), 16);
@@ -112,7 +113,7 @@ let level = 1, pipes, cols, slots, step, lastTick, T, sink, emitters, flyers, pa
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
 function genLevel(n) {
-  const nc = Math.min(3 + Math.floor((n - 1) / 2), 6);
+  const nc = Math.min(3 + Math.floor((n - 1) / 2), NAMES.length);
   const colors = shuffle(NAMES.slice()).slice(0, nc);
   const per = Math.min(1 + n, 9);
   const ps = PIPE_X.map(x => {
