@@ -169,6 +169,7 @@ function startLevel(n) {
   step = 0; T = 0; lastTick = 0;
   sink = []; emitters = []; flyers = []; parts = [];
   state = 'play'; endT = 0; hintOn = n === 1;
+  speed = 1;
   ov.hidden = true;
   try { localStorage.setItem('colorballs.level', String(n)); } catch (e) {}
 }
@@ -496,6 +497,15 @@ function draw() {
     ctx.beginPath(); ctx.arc(p.x, p.y, 3 + 2 * a, 0, 7); ctx.fill();
   }
   ctx.globalAlpha = 1;
+  if (speed > 1.2 && state === 'play') {
+    ctx.globalAlpha = Math.min(1, (speed - 1.2) / 1.5);
+    rr(150, 404, 100, 28, 14); ctx.fillStyle = '#ffffff'; ctx.fill();
+    ctx.fillStyle = '#2b2f55';
+    for (const ox of [166, 176]) { ctx.beginPath(); ctx.moveTo(ox, 411); ctx.lineTo(ox + 9, 418); ctx.lineTo(ox, 425); ctx.fill(); }
+    ctx.font = '800 13px "Nunito", system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('FINISHING', 190, 418.5);
+    ctx.globalAlpha = 1;
+  }
   if (hintOn) {
     const b = reduced ? 0 : Math.sin(T / 180) * 4;
     rr(110, 334 + b, 180, 34, 17); ctx.fillStyle = '#ffffff'; ctx.fill();
@@ -515,10 +525,14 @@ function resize() {
   ctx.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
 }
 addEventListener('resize', resize);
-let last = performance.now();
+let last = performance.now(), speed = 1;
+// Once the pipes and the funnel are empty, the belt holds exactly what the trays need,
+// so the level can't be lost: fast-forward to the end.
+const finishing = () => state === 'play' && !sink.length && !emitters.length && pipes.every(p => !p.queue.length && !p.anim);
 function frame(now) {
   const dt = Math.min(.033, (now - last) / 1000); last = now;
-  if (state !== 'over') update(dt);
+  speed += ((finishing() ? 4 : 1) - speed) * Math.min(1, dt * 2.5);
+  if (state !== 'over') update(dt * speed);
   else { T += dt * 1000; for (const p of parts) { p.vy += 600 * dt; p.x += p.vx * dt; p.y += p.vy * dt; } }
   draw();
   requestAnimationFrame(frame);
